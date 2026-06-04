@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Stok Gudang Final Pro</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    margin:0;
+    background: linear-gradient(to right, #00c6ff, #0072ff);
+}
+
+.container{display:flex;}
+
+.sidebar{
+    width:220px;
+    background:#2c3e50;
+    color:white;
+    height:100vh;
+    padding:20px;
+}
+.sidebar ul{list-style:none;padding:0;}
+.sidebar ul li{
+    padding:10px;
+    margin:10px 0;
+    background:#34495e;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.main{flex:1;padding:20px;background:#f4f6f9;}
+
+.card{
+    background:white;
+    padding:30px;
+    margin-bottom:20px;
+    border-radius:15px;
+    text-align:center;
+}
+
+button{
+    padding:6px 10px;
+    margin:2px;
+    border:none;
+    border-radius:5px;
+    background:#3498db;
+    color:white;
+    cursor:pointer;
+}
+
+table{width:100%;border-collapse:collapse;}
+th,td{border:1px solid #ddd;padding:10px;text-align:center;}
+input.qty{width:60px;}
+
+.profile-text {
+    opacity:0;
+    transform:translateY(20px);
+    animation:fadeUp 1s ease forwards;
+}
+
+@keyframes fadeUp {
+    to {
+        opacity:1;
+        transform:translateY(0);
+    }
+}
+
+.love{animation:loveBeat 1s infinite;}
+@keyframes loveBeat{
+0%{transform:scale(1);}
+50%{transform:scale(1.2);}
+100%{transform:scale(1);}
+}
+
+#editBox{
+display:none;
+position:fixed;
+top:30%;
+left:50%;
+transform:translate(-50%,-50%);
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 0 10px rgba(0,0,0,0.3);
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+<h2><span class="love">??</span> Gudang</h2>
+<ul>
+<li onclick="showPage('dashboard')">Dashboard</li>
+<li onclick="showPage('data')">Data Barang</li>
+<li onclick="showPage('riwayat')">Riwayat</li>
+<li onclick="showPage('laporan')">Laporan</li>
+</ul>
+</div>
+
+<div class="main">
+
+<!-- DASHBOARD -->
+<div id="dashboardPage" class="card">
+<h2 class="profile-text"><span class="love">??</span> Selamat Datang</h2>
+
+<p class="profile-text" style="font-size:18px; line-height:1.7;">
+Hay, perkenalkan saya <b>Jefry</b>.<br><br>
+Ini adalah aplikasi <b>Stok Gudang</b>.<br><br>
+Terima kasih ??<br><br>
+</p>
+</div>
+
+<!-- DATA -->
+<div id="dataPage">
+
+<div class="card">
+<h3>Input Barang</h3>
+<input id="nama" placeholder="Nama Barang">
+<input id="masuk" type="number" placeholder="Stok Masuk">
+<input id="expired" type="date">
+<button onclick="tambahBarang()">Tambah</button>
+</div>
+
+<div class="card">
+<h3>Data Stok</h3>
+
+<input id="search" placeholder="Cari barang..." onkeyup="cariBarang()">
+
+<table>
+<thead>
+<tr>
+<th>Tanggal</th><th>Nama</th><th>Masuk</th><th>Keluar</th><th>Sisa</th><th>Expired</th><th>Aksi</th>
+</tr>
+</thead>
+<tbody id="tabel"></tbody>
+</table>
+</div>
+</div>
+
+<!-- RIWAYAT -->
+<div id="riwayatPage" class="card">
+<h3>Riwayat</h3>
+
+<table>
+<thead>
+<tr>
+<th>Tanggal</th><th>Nama</th><th>Jenis</th><th>Jumlah</th><th>Aksi</th>
+</tr>
+</thead>
+<tbody id="tabelRiwayat"></tbody>
+</table>
+</div>
+
+<!-- LAPORAN -->
+<div id="laporanPage" class="card">
+<h3>Laporan</h3>
+<button onclick="exportExcel()">Export Excel</button>
+</div>
+
+</div>
+</div>
+
+<!-- POPUP EDIT -->
+<div id="editBox">
+<h3>Edit Barang</h3>
+<input type="hidden" id="edit_index">
+<input id="edit_nama"><br><br>
+<input id="edit_masuk" type="number"><br><br>
+<button onclick="simpanEdit()">Simpan</button>
+<button onclick="hapusDariEdit()" style="background:red;">Hapus</button>
+<button onclick="tutupEdit()">Batal</button>
+</div>
+
+<script>
+
+let data = JSON.parse(localStorage.getItem("stokGudang")) || [];
+let riwayat = JSON.parse(localStorage.getItem("riwayatGudang")) || [];
+
+function simpanData(){localStorage.setItem("stokGudang",JSON.stringify(data));}
+function simpanRiwayat(){localStorage.setItem("riwayatGudang",JSON.stringify(riwayat));}
+
+// TAMBAH
+function tambahBarang(){
+let nama=document.getElementById("nama").value;
+let masuk=parseInt(document.getElementById("masuk").value)||0;
+let expired=document.getElementById("expired").value;
+
+if(!nama||!expired)return alert("Isi data lengkap");
+
+let tanggal=new Date().toLocaleDateString("id-ID");
+
+data.push({tanggal,nama,masuk,keluar:0,expired});
+
+riwayat.push({tanggal,nama,jenis:"Masuk",jumlah:masuk});
+
+simpanData();simpanRiwayat();tampil();
+}
+
+// TAMPIL (FIX INDEX AMAN)
+function tampil(filter=""){
+let t=document.getElementById("tabel");
+t.innerHTML="";
+
+data.forEach((i,x)=>{
+
+if(!i.nama.toLowerCase().includes(filter.toLowerCase())) return;
+
+let s=i.masuk-i.keluar;
+
+let selisih=Math.ceil((new Date(i.expired)-new Date())/(1000*60*60*24));
+let warna = selisih<=3 ? "#ff4d4d" : selisih<=7 ? "#f1c40f" : "#2ecc71";
+
+t.innerHTML+=`
+<tr style="background:${warna}">
+<td>${i.tanggal}</td>
+<td>${i.nama}</td>
+<td>${i.masuk}</td>
+<td>${i.keluar}</td>
+<td>${s}</td>
+<td>${i.expired}</td>
+<td>
+<input id="keluar_${x}" class="qty" onchange="keluarAuto(${x})">
+<button onclick="editBarang(${x})">Edit</button>
+</td>
+</tr>`;
+});
+}
+
+// SEARCH
+function cariBarang(){
+let keyword=document.getElementById("search").value;
+tampil(keyword);
+}
+
+// KELUAR
+function keluarAuto(x){
+let j=parseInt(document.getElementById(`keluar_${x}`).value);
+if(isNaN(j)||j<=0)return alert("Input salah");
+
+if(j > data[x].masuk-data[x].keluar)return alert("Stok kurang");
+
+data[x].keluar+=j;
+
+let tanggal=new Date().toLocaleDateString("id-ID");
+
+riwayat.push({tanggal,nama:data[x].nama,jenis:"Keluar",jumlah:j});
+
+simpanData();simpanRiwayat();tampil();
+}
+
+// EDIT
+function editBarang(i){
+document.getElementById("editBox").style.display="block";
+document.getElementById("edit_index").value=i;
+document.getElementById("edit_nama").value=data[i].nama;
+document.getElementById("edit_masuk").value=data[i].masuk;
+}
+
+function simpanEdit(){
+let i=document.getElementById("edit_index").value;
+data[i].nama=document.getElementById("edit_nama").value;
+data[i].masuk=parseInt(document.getElementById("edit_masuk").value);
+
+tutupEdit();simpanData();tampil();
+}
+
+function hapusDariEdit(){
+let i=document.getElementById("edit_index").value;
+data.splice(i,1);
+tutupEdit();simpanData();tampil();
+}
+
+function tutupEdit(){
+document.getElementById("editBox").style.display="none";
+}
+
+// RIWAYAT
+function tampilRiwayat(){
+let t=document.getElementById("tabelRiwayat");
+t.innerHTML="";
+
+riwayat.forEach((i,x)=>{
+t.innerHTML+=`
+<tr>
+<td>${i.tanggal}</td>
+<td>${i.nama}</td>
+<td>${i.jenis}</td>
+<td>${i.jumlah}</td>
+<td></td>
+</tr>`;
+});
+}
+
+// NAV
+function showPage(p){
+["dashboardPage","dataPage","riwayatPage","laporanPage"]
+.forEach(id=>document.getElementById(id).style.display="none");
+
+if(p==="dashboard")document.getElementById("dashboardPage").style.display="block";
+if(p==="data"){document.getElementById("dataPage").style.display="block"; tampil();}
+if(p==="riwayat"){document.getElementById("riwayatPage").style.display="block"; tampilRiwayat();}
+if(p==="laporan")document.getElementById("laporanPage").style.display="block";
+}
+
+// EXPORT
+function exportExcel(){
+let wb=XLSX.utils.book_new();
+let arr=[["Tanggal","Nama","Masuk","Keluar","Sisa"]];
+
+data.forEach(i=>{
+arr.push([i.tanggal,i.nama,i.masuk,i.keluar,i.masuk-i.keluar]);
+});
+
+let ws=XLSX.utils.aoa_to_sheet(arr);
+XLSX.utils.book_append_sheet(wb,ws,"Stok");
+XLSX.writeFile(wb,"stok.xlsx");
+}
+
+// INIT
+showPage("dashboard");
+tampil();
+
+</script>
+
+</body>
+</html>
